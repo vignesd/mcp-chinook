@@ -6,15 +6,16 @@ from tools.album_tools import (
     server_info,
     get_albums_count,
 )
+from tools.customer_tools import (
+    get_customer
+)
+
 from core.logging import logger
 from core.config import settings
 from core.tool_annotations import READ, WRITE
 from mcp.server import MCPServer
-from mcp.types import ToolAnnotations
 from prompts.album_prompts import register_album_prompts
 from resources.album_resources import register_album_resources
-
-"""Entry point for the Chinook MCP server."""
 
 
 # Create the MCP server.
@@ -105,6 +106,8 @@ mcp.add_tool(
     structured_output=True,
 )
 
+mcp.add_tool(get_customer)
+
 
 def main() -> None:
     """Start the MCP server using STDIO transport."""
@@ -112,7 +115,6 @@ def main() -> None:
     logger.info("Transport: STDIO")
 
     try:
-        tools = mcp.list_tools()
         mcp.run(transport="stdio")
 
     except KeyboardInterrupt:
