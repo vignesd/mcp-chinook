@@ -7,7 +7,15 @@ from tools.album_tools import (
     get_albums_count,
 )
 from tools.customer_tools import (
-    get_customer
+    get_customer_by_email,
+    get_customer_by_id,
+    get_customers_count,
+    search_customers_by_keyword
+)
+
+from tools.invoice_tools import (
+    get_customer_purchase_tracks,
+    get_customer_invoices
 )
 
 from core.logging import logger
@@ -15,7 +23,9 @@ from core.config import settings
 from core.tool_annotations import READ, WRITE
 from mcp.server import MCPServer
 from prompts.album_prompts import register_album_prompts
+from prompts.customer_prompts import register_customer_prompts
 from resources.album_resources import register_album_resources
+from resources.customer_resource import register_customer_resources
 
 
 # Create the MCP server.
@@ -26,9 +36,11 @@ mcp = MCPServer(
 )
 # Register all prompts centrally.
 register_album_prompts(mcp)
+register_customer_prompts(mcp)
 
 # Register all resources centrally.
 register_album_resources(mcp)
+register_customer_resources(mcp)
 
 # Register all tools centrally.
 mcp.add_tool(
@@ -106,7 +118,93 @@ mcp.add_tool(
     structured_output=True,
 )
 
-mcp.add_tool(get_customer)
+mcp.add_tool(
+    get_customer_by_email,
+    name="get_customer_by_email",
+    title="Get Customer by Email",
+    description=(
+        "Retrieve a customer from the Chinook database using their email address. "
+        "Use this tool when the user asks to find or view a customer by email. "
+        "Returns the matching customer details."
+    ),
+    annotations=READ,
+    structured_output=True,
+)
+
+mcp.add_tool(
+    get_customer_by_id,
+    name="get_customer_by_id",
+    title="Get Customer by ID",
+    description=(
+        "Retrieve a customer from the Chinook database using their customer ID. "
+        "Use this tool when the user asks to find or view a specific customer "
+        "by ID. Returns the matching customer details."
+    ),
+    annotations=READ,
+    structured_output=True,
+)
+
+mcp.add_tool(
+    get_customers_count,
+    name="get_customers_count",
+    title="Get Total Customer Count",
+    description=(
+        "Return the total number of customers in the Chinook database. "
+        "Use this tool when the user asks how many customers exist. "
+        "Returns a count without retrieving every customer record."
+    ),
+    annotations=READ,
+    structured_output=True,
+)
+
+mcp.add_tool(
+    search_customers_by_keyword,
+    name="search_customers_by_keyword",
+    title="Search Customers by Keyword",
+    description=(
+        "Search customers in the Chinook database using a keyword. "
+        "Use this tool when the user wants to find customers by name, "
+        "company, email, city, or other supported customer fields. "
+        "Returns matching customer records."
+    ),
+    annotations=READ,
+    structured_output=True,
+)
+
+mcp.add_tool(
+    get_customer_invoices,
+    name="get_customer_invoices",
+    title="Get Customer Invoices",
+    description=(
+        "Retrieve all invoices for a customer in the Chinook database using "
+        "their CustomerId. Returns invoice details including invoice ID, "
+        "invoice date, billing address, billing country, and invoice total. "
+        "Use this tool when the user asks to view a customer's invoices or "
+        "billing history. Requires a valid customer ID. If the customer does "
+        "not exist, return a not-found error. An existing customer with no "
+        "invoices should return an empty invoice list."
+    ),
+    annotations=READ,
+    structured_output=True,
+)
+
+mcp.add_tool(
+    get_customer_purchase_tracks,
+    name="get_customer_purchase_tracks",
+    title="Get Customer Purchase Tracks",
+    description=(
+        "Retrieve the tracks purchased by a customer in the Chinook database "
+        "using their CustomerId. Returns purchase details including invoice ID, "
+        "invoice date, customer name, billing country, track name, unit price, "
+        "quantity, line total, and invoice total. Use this tool when the user "
+        "asks about a customer's purchase history, purchased songs, or tracks "
+        "included in their invoices. Requires a valid customer ID. If the "
+        "customer does not exist, return a not-found error. An existing "
+        "customer with no purchases should return an empty purchase list."
+    ),
+    annotations=READ,
+    structured_output=True,
+)
 
 
 def main() -> None:

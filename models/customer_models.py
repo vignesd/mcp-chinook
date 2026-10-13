@@ -1,6 +1,6 @@
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
-from typing import Any, Literal
+from typing import Any, Literal, List
 
 
 class Customer(BaseModel):
@@ -106,3 +106,10 @@ class CustomerOutput(Customer):
 
     found: bool
     customer: dict[str, Any] | None
+
+
+class CustomerListOutput(Customer):
+    model_config = ConfigDict(extra="forbid")
+
+    found: bool
+    customer: List[dict[str, Any]] | None
