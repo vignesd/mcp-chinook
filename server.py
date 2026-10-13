@@ -18,6 +18,13 @@ from tools.invoice_tools import (
     get_customer_invoices
 )
 
+import hmac
+import os
+from typing import Any
+
+import uvicorn
+from mcp.server.transport_security import TransportSecuritySettings
+
 from core.logging import logger
 from core.config import settings
 from core.tool_annotations import READ, WRITE
@@ -207,16 +214,177 @@ mcp.add_tool(
 )
 
 
+class ApiKeyMiddleware:
+    """Protect the HTTP MCP endpoint with a Bearer API key."""
+
+    def __init__(self, app: Any, api_key: str) -> None:
+        self.app = app
+        self._api_key = api_key
+
+    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
+        # Forward ASGI lifespan events so MCP session management works.
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        path = scope.get("path", "")
+
+        # Minimal public liveness endpoint for Render.
+        if path == "/health" and scope.get("method") == "GET":
+            body = b'{"status":"ok"}'
+            await send({
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"content-length", str(len(body)).encode("ascii")),
+                    (b"cache-control", b"no-store"),
+                ],
+            })
+            await send({"type": "http.response.body", "body": body})
+            return
+
+        headers = {
+            key.lower(): value
+            for key, value in scope.get("headers", [])
+        }
+        authorization = headers.get(b"authorization", b"")
+
+        provided_key = ""
+        if authorization.startswith(b"Bearer "):
+            try:
+                provided_key = authorization[len(b"Bearer "):].decode("utf-8")
+            except UnicodeDecodeError:
+                pass
+
+        if not provided_key or not hmac.compare_digest(
+            provided_key, self._api_key
+        ):
+            logger.warning(
+                "Rejected unauthenticated HTTP request: method=%s path=%s",
+                scope.get("method", "UNKNOWN"),
+                path,
+            )
+            body = b'{"error":"Unauthorized"}'
+            await send({
+                "type": "http.response.start",
+                "status": 401,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"content-length", str(len(body)).encode("ascii")),
+                    (b"cache-control", b"no-store"),
+                    (b"www-authenticate", b"Bearer"),
+                ],
+            })
+            await send({"type": "http.response.body", "body": body})
+            return
+
+        await self.app(scope, receive, send)
+
+
+def _run_stdio() -> None:
+    """Start the server for local STDIO clients."""
+    logger.info(
+        "Starting %s v%s using STDIO",
+        settings.app_name,
+        settings.app_version,
+    )
+    mcp.run(transport="stdio")
+
+
+def _run_streamable_http() -> None:
+    """Start authenticated Streamable HTTP for Render."""
+    api_key = os.getenv("MCP_API_KEY", "").strip()
+
+    if len(api_key) < 32:
+        raise RuntimeError(
+            "MCP_API_KEY must be set to a strong secret "
+            "of at least 32 characters."
+        )
+
+    port = int(os.getenv("PORT", os.getenv("MCP_PORT", "8000")))
+    if not 1 <= port <= 65535:
+        raise RuntimeError("PORT must be between 1 and 65535.")
+
+    mcp_path = os.getenv("MCP_PATH", "/mcp").strip()
+    if not mcp_path.startswith("/") or mcp_path == "/":
+        raise RuntimeError("MCP_PATH must be a valid path such as /mcp.")
+
+    allowed_hosts = [
+        value.strip()
+        for value in os.getenv("MCP_ALLOWED_HOSTS", "").split(",")
+        if value.strip()
+    ]
+
+    if not allowed_hosts:
+        raise RuntimeError(
+            "Configure MCP_ALLOWED_HOSTS with your exact Render hostname."
+        )
+
+    allowed_origins = [
+        value.strip()
+        for value in os.getenv("MCP_ALLOWED_ORIGINS", "").split(",")
+        if value.strip()
+    ]
+
+    security = TransportSecuritySettings(
+        allowed_hosts=allowed_hosts,
+        allowed_origins=allowed_origins,
+    )
+
+    # Keep the same MCPServer instance and all existing registrations.
+    mcp_app = mcp.streamable_http_app(
+        streamable_http_path=mcp_path,
+        host="0.0.0.0",
+        transport_security=security,
+        max_request_body_size=1_048_576,
+        session_idle_timeout=1800,
+        max_sessions=1000,
+    )
+
+    app = ApiKeyMiddleware(mcp_app, api_key)
+
+    logger.info(
+        "Starting %s v%s using Streamable HTTP",
+        settings.app_name,
+        settings.app_version,
+    )
+    logger.info("MCP endpoint path: %s", mcp_path)
+    logger.info("Health endpoint: /health")
+    logger.info("HTTP authentication enabled.")
+
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=port,
+        log_level=str(settings.log_level).lower(),
+        log_config=None,
+        access_log=False,
+        server_header=False,
+        date_header=False,
+        timeout_keep_alive=5,
+        limit_concurrency=100,
+    )
+
+
 def main() -> None:
-    """Start the MCP server using STDIO transport."""
-    logger.info("Starting %s v%s", settings.app_name, settings.app_version)
-    logger.info("Transport: STDIO")
+    """Select STDIO or Streamable HTTP from the environment."""
+    transport = os.getenv("MCP_TRANSPORT", "stdio").strip().lower()
 
     try:
-        mcp.run(transport="stdio")
-
+        if transport == "stdio":
+            _run_stdio()
+        elif transport == "streamable-http":
+            _run_streamable_http()
+        else:
+            raise ValueError(
+                "MCP_TRANSPORT must be 'stdio' or 'streamable-http'."
+            )
     except KeyboardInterrupt:
         logger.info("MCP server stopped by user.")
+    except Exception:
+        logger.exception("MCP server failed.")
+        raise
 
 
 if __name__ == "__main__":
