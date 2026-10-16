@@ -15,7 +15,38 @@ from tools.customer_tools import (
 
 from tools.invoice_tools import (
     get_customer_purchase_tracks,
-    get_customer_invoices
+    get_customer_invoices,
+    get_invoice_details,
+)
+
+from tools.artist_tools import (
+    get_artist_details,
+    list_artists,
+    search_artists,
+)
+
+from tools.employee_tools import (
+    get_employee_details,
+    get_employee_sales_summary,
+    list_employees,
+)
+
+from tools.track_tools import (
+    get_longest_tracks,
+    get_track_details,
+    get_tracks_by_genre,
+    list_genres,
+    search_tracks,
+)
+
+from tools.sales_tools import (
+    get_best_selling_tracks,
+    get_customer_lifetime_value,
+    get_revenue_by_country,
+    get_sales_by_month,
+    get_top_artists_by_revenue,
+    get_top_customers,
+    get_total_revenue,
 )
 
 import hmac
@@ -208,6 +239,276 @@ mcp.add_tool(
         "included in their invoices. Requires a valid customer ID. If the "
         "customer does not exist, return a not-found error. An existing "
         "customer with no purchases should return an empty purchase list."
+    ),
+    annotations=READ,
+    structured_output=True,
+)
+
+mcp.add_tool(
+    get_invoice_details,
+    name="get_invoice_details",
+    title="Get Invoice Details",
+    description=(
+        "Retrieve a single invoice from the Chinook database by its InvoiceId, "
+        "including the customer, billing details, invoice total, and every "
+        "line item with track name, album, artist, unit price, quantity, and "
+        "line total. Use this tool when the user provides an invoice ID or "
+        "wants to see what was purchased on a specific invoice. If the invoice "
+        "does not exist, return a not-found error; use get_customer_invoices "
+        "to find valid invoice IDs."
+    ),
+    annotations=READ,
+    structured_output=True,
+)
+
+mcp.add_tool(
+    list_artists,
+    name="list_artists",
+    title="List Artists",
+    description=(
+        "Retrieve a page of artists from the Chinook database, each with the "
+        "number of albums they have. Use this tool when the user wants to "
+        "browse artists. Supports limit (1-100) and offset for pagination; "
+        "use next_offset from the response to request the next page."
+    ),
+    annotations=READ,
+    structured_output=True,
+)
+
+mcp.add_tool(
+    search_artists,
+    name="search_artists",
+    title="Search Artists",
+    description=(
+        "Search the Chinook database for artists by a partial name match. "
+        "Use this tool when the user knows all or part of an artist's name. "
+        "Returns matching artists with their ArtistId and album count."
+    ),
+    annotations=READ,
+    structured_output=True,
+)
+
+mcp.add_tool(
+    get_artist_details,
+    name="get_artist_details",
+    title="Get Artist Details",
+    description=(
+        "Retrieve an artist from the Chinook database by ArtistId, including "
+        "every album by the artist and the number of tracks on each album. "
+        "Use this tool when the user provides an artist ID or wants to see an "
+        "artist's discography. If the artist does not exist, return a "
+        "not-found error; use search_artists to find artists by name."
+    ),
+    annotations=READ,
+    structured_output=True,
+)
+
+mcp.add_tool(
+    list_employees,
+    name="list_employees",
+    title="List Employees",
+    description=(
+        "Retrieve all Chinook employees with their EmployeeId, title, "
+        "location, email, and manager. Use this tool when the user asks who "
+        "works at Chinook, about the reporting structure, or needs a valid "
+        "employee ID."
+    ),
+    annotations=READ,
+    structured_output=True,
+)
+
+mcp.add_tool(
+    get_employee_details,
+    name="get_employee_details",
+    title="Get Employee Details",
+    description=(
+        "Retrieve an employee from the Chinook database by EmployeeId, "
+        "including title, manager, hire date, contact details, the number of "
+        "customers they support, and their direct reports. Use this tool when "
+        "the user asks about a specific employee. If the employee does not "
+        "exist, return a not-found error; use list_employees to find valid IDs."
+    ),
+    annotations=READ,
+    structured_output=True,
+)
+
+mcp.add_tool(
+    get_employee_sales_summary,
+    name="get_employee_sales_summary",
+    title="Get Employee Sales Summary",
+    description=(
+        "Summarize sales for the customers an employee supports as their "
+        "support representative: customer count, invoice count, total sales, "
+        "average invoice value, and first and last sale dates. Use this tool "
+        "when the user asks how much an employee or sales agent has sold. "
+        "Employees with no assigned customers return zero totals. If the "
+        "employee does not exist, return a not-found error."
+    ),
+    annotations=READ,
+    structured_output=True,
+)
+
+mcp.add_tool(
+    search_tracks,
+    name="search_tracks",
+    title="Search Tracks",
+    description=(
+        "Search the Chinook database for tracks by a partial match on the "
+        "track name or composer. Use this tool when the user knows all or part "
+        "of a song title or composer. Returns tracks with album, artist, genre, "
+        "duration, and price. Supports limit (1-100) and offset for pagination."
+    ),
+    annotations=READ,
+    structured_output=True,
+)
+
+mcp.add_tool(
+    get_track_details,
+    name="get_track_details",
+    title="Get Track Details",
+    description=(
+        "Retrieve a track from the Chinook database by TrackId, including its "
+        "album, artist, genre, media type, composer, duration, file size, "
+        "price, and total units sold. Use this tool when the user provides a "
+        "track ID. If the track does not exist, return a not-found error; use "
+        "search_tracks to find tracks by name."
+    ),
+    annotations=READ,
+    structured_output=True,
+)
+
+mcp.add_tool(
+    list_genres,
+    name="list_genres",
+    title="List Genres",
+    description=(
+        "Retrieve all music genres in the Chinook database with the number of "
+        "tracks in each. Use this tool when the user asks which genres exist "
+        "or needs a GenreId for get_tracks_by_genre."
+    ),
+    annotations=READ,
+    structured_output=True,
+)
+
+mcp.add_tool(
+    get_tracks_by_genre,
+    name="get_tracks_by_genre",
+    title="Get Tracks by Genre",
+    description=(
+        "Retrieve a page of tracks in a genre using its GenreId. Use this tool "
+        "when the user wants to browse tracks of a particular genre; call "
+        "list_genres first to find the GenreId. Supports limit (1-100) and "
+        "offset for pagination. If the genre does not exist, return a "
+        "not-found error."
+    ),
+    annotations=READ,
+    structured_output=True,
+)
+
+mcp.add_tool(
+    get_longest_tracks,
+    name="get_longest_tracks",
+    title="Get Longest Tracks",
+    description=(
+        "Retrieve the longest tracks in the Chinook database, ordered by "
+        "duration. Use this tool when the user asks for the longest songs or "
+        "episodes. Returns up to limit tracks (1-100) with duration as m:ss."
+    ),
+    annotations=READ,
+    structured_output=True,
+)
+
+mcp.add_tool(
+    get_total_revenue,
+    name="get_total_revenue",
+    title="Get Total Revenue",
+    description=(
+        "Calculate total revenue, invoice count, customer count, and average "
+        "invoice value from Chinook invoices. Optionally limit the result to "
+        "an inclusive date range with start_date and end_date in YYYY-MM-DD "
+        "format. Use this tool when the user asks how much the store has "
+        "earned overall or within a period."
+    ),
+    annotations=READ,
+    structured_output=True,
+)
+
+mcp.add_tool(
+    get_sales_by_month,
+    name="get_sales_by_month",
+    title="Get Sales by Month",
+    description=(
+        "Retrieve invoice counts and revenue for each month of a given year, "
+        "plus the yearly totals. Use this tool when the user asks about sales "
+        "trends or monthly performance. Months without sales are omitted; a "
+        "year with no sales returns an empty list."
+    ),
+    annotations=READ,
+    structured_output=True,
+)
+
+mcp.add_tool(
+    get_revenue_by_country,
+    name="get_revenue_by_country",
+    title="Get Revenue by Country",
+    description=(
+        "Rank billing countries by revenue, with customer and invoice counts "
+        "for each. Use this tool when the user asks which countries generate "
+        "the most sales. Returns up to limit countries (1-100)."
+    ),
+    annotations=READ,
+    structured_output=True,
+)
+
+mcp.add_tool(
+    get_best_selling_tracks,
+    name="get_best_selling_tracks",
+    title="Get Best-Selling Tracks",
+    description=(
+        "Rank tracks by the number of units sold, with artist and revenue for "
+        "each. Use this tool when the user asks for the most popular or "
+        "best-selling songs. Returns up to limit tracks (1-100)."
+    ),
+    annotations=READ,
+    structured_output=True,
+)
+
+mcp.add_tool(
+    get_top_artists_by_revenue,
+    name="get_top_artists_by_revenue",
+    title="Get Top Artists by Revenue",
+    description=(
+        "Rank artists by the revenue generated from sales of their tracks, "
+        "with units sold for each. Use this tool when the user asks which "
+        "artists earn the most. Returns up to limit artists (1-100)."
+    ),
+    annotations=READ,
+    structured_output=True,
+)
+
+mcp.add_tool(
+    get_top_customers,
+    name="get_top_customers",
+    title="Get Top Customers",
+    description=(
+        "Rank customers by total spend, with country and invoice count for "
+        "each. Use this tool when the user asks who the best or biggest "
+        "customers are. Returns up to limit customers (1-100)."
+    ),
+    annotations=READ,
+    structured_output=True,
+)
+
+mcp.add_tool(
+    get_customer_lifetime_value,
+    name="get_customer_lifetime_value",
+    title="Get Customer Lifetime Value",
+    description=(
+        "Calculate a customer's lifetime value by CustomerId: total spent, "
+        "invoice count, average invoice value, tracks purchased, and first "
+        "and last purchase dates. Use this tool when the user asks how much a "
+        "specific customer has spent. Customers with no purchases return zero "
+        "totals. If the customer does not exist, return a not-found error."
     ),
     annotations=READ,
     structured_output=True,

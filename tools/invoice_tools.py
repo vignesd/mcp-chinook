@@ -2,13 +2,18 @@ from models.invoice_models import (
     CustomerInvoiceOutput,
     CustomerInvoice,
     CustomerPurchaseOutput,
-    CustomerPurchase
+    CustomerPurchase,
+    InvoiceDetailsOutput,
 )
 from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 from mcp.server.mcpserver.exceptions import ToolError
 
-from services.Invoice_services import get_invoices, get_invoice_tracks
+from services.Invoice_services import (
+    get_invoices,
+    get_invoice_tracks,
+    get_invoice_details as fetch_invoice_details,
+)
 
 from core.logging import logger
 from pydantic import ValidationError
@@ -39,6 +44,9 @@ async def get_customer_invoices(customer_id: int) -> CustomerInvoiceOutput:
             invoices=invoices,  # type:ignore
             total_invoices=len(validated_invoices),
         )
+
+    except ToolError:
+        raise
 
     except ValidationError:
         raise ToolError(
@@ -91,6 +99,9 @@ async def get_customer_purchase_tracks(
             total_purchases=len(purchases),  # type:ignore
         )
 
+    except ToolError:
+        raise
+
     except SQLAlchemyError:
         logger.exception(
             "Database failure fetching purchase tracks for customer_id=%s",
@@ -107,4 +118,59 @@ async def get_customer_purchase_tracks(
         )
         raise ToolError(
             "INTERNAL_ERROR: Unable to retrieve customer purchase tracks."
+        ) from None
+
+
+async def get_invoice_details(invoice_id: int) -> InvoiceDetailsOutput:
+    """Retrieve an invoice and its line items by InvoiceId.
+
+    If the invoice ID is invalid, correct the input before retrying.
+    If the invoice does not exist, do not retry the same invoice ID.
+    Retry database failures only when they are transient.
+    """
+    if invoice_id < 1:
+        raise ToolError("INVALID_ARGUMENT: invoice_id must be a positive integer. "
+                        "Provide an invoice_id greater than or equal to 1. "
+                        "Do not retry with the same invalid value.")
+    try:
+        details = await fetch_invoice_details(invoice_id)
+
+        if details is None:
+            raise ToolError(
+                f"NOT_FOUND: No invoice exists with invoice_id={invoice_id}. "
+                "Do not retry the same ID. Use get_customer_invoices to find "
+                "valid invoice IDs for a customer."
+            )
+
+        return InvoiceDetailsOutput(
+            found=True,
+            invoice=details["invoice"],
+            line_count=len(details["lines"]),
+            lines=details["lines"],
+        )
+
+    except ToolError:
+        raise
+
+    except SQLAlchemyError:
+        logger.exception(
+            "Database failure fetching invoice_id=%s",
+            invoice_id,
+        )
+        raise ToolError(
+            "DATABASE_ERROR: Unable to retrieve the invoice because a "
+            "database operation failed. Retry at most twice with a short "
+            "delay. If the error persists, stop and report the issue to "
+            "the user."
+        ) from None
+
+    except Exception:
+        logger.exception(
+            "Unexpected error fetching invoice_id=%s",
+            invoice_id,
+        )
+        raise ToolError(
+            "INTERNAL_ERROR: An unexpected error occurred while retrieving "
+            "the invoice. Do not retry repeatedly. Report the issue to the "
+            "user if it persists."
         ) from None

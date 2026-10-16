@@ -64,3 +64,29 @@ class CustomerPurchaseOutput(BaseModel):
     customer_id: int
     total_purchases: int
     purchases: List[CustomerPurchase]
+
+
+class InvoiceLineItem(Invoice):
+    """A single line item on an invoice."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    InvoiceLineId: int
+    TrackId: int
+    TrackName: str
+    AlbumTitle: str
+    ArtistName: str
+    UnitPrice: Decimal
+    Quantity: int
+    LineTotal: Decimal
+
+
+class InvoiceDetailsOutput(BaseModel):
+    """Structured response containing an invoice and its line items."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    found: bool
+    invoice: CustomerInvoice
+    line_count: int
+    lines: list[InvoiceLineItem]
